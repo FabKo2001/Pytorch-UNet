@@ -11,6 +11,7 @@ from os.path import splitext, isfile, join
 from pathlib import Path
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import re
 
 
 def load_image(filename):
@@ -24,8 +25,13 @@ def load_image(filename):
 
 
 def unique_mask_values(idx, mask_dir, mask_suffix):
-    mask_file = list(mask_dir.glob(idx + mask_suffix + '.*'))[0]
-    mask = np.asarray(load_image(mask_file))
+    # Neuer Suchpfad: Label<ID>.*
+    mask_file = list(mask_dir.glob(f'Label{idx}.*'))
+    if not mask_file:
+        raise FileNotFoundError(f'❌ Keine Maske gefunden für ID {idx} im Verzeichnis {mask_dir}')
+
+    mask = np.asarray(load_image(mask_file[0]))
+
     if mask.ndim == 2:
         return np.unique(mask)
     elif mask.ndim == 3:
@@ -43,7 +49,11 @@ class BasicDataset(Dataset):
         self.scale = scale
         self.mask_suffix = mask_suffix
 
-        self.ids = [splitext(file)[0] for file in listdir(images_dir) if isfile(join(images_dir, file)) and not file.startswith('.')]
+        self.ids = [
+                       re.findall(r'\d+', splitext(file)[0])[0]  # Nur die Zahl extrahieren
+                       for file in listdir(images_dir)
+                       if isfile(join(images_dir, file)) and not file.startswith('.')
+                   ]
         if not self.ids:
             raise RuntimeError(f'No input file found in {images_dir}, make sure you put your images there')
 
@@ -91,17 +101,19 @@ class BasicDataset(Dataset):
             return img
 
     def __getitem__(self, idx):
-        name = self.ids[idx]
-        mask_file = list(self.mask_dir.glob(name + self.mask_suffix + '.*'))
-        img_file = list(self.images_dir.glob(name + '.*'))
+        id_num = self.ids[idx]
 
-        assert len(img_file) == 1, f'Either no image or multiple images found for the ID {name}: {img_file}'
-        assert len(mask_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {mask_file}'
+        img_file = list(self.images_dir.glob(f'Image{id_num}.*'))
+        mask_file = list(self.mask_dir.glob(f'Label{id_num}.*'))
+
+        assert len(img_file) == 1, f'Either no image or multiple images found for ID {id_num}: {img_file}'
+        assert len(mask_file) == 1, f'Either no mask or multiple masks found for ID {id_num}: {mask_file}'
+
         mask = load_image(mask_file[0])
         img = load_image(img_file[0])
 
         assert img.size == mask.size, \
-            f'Image and mask {name} should be the same size, but are {img.size} and {mask.size}'
+            f'Image and mask ID {id_num} should be the same size, but are {img.size} and {mask.size}'
 
         img = self.preprocess(self.mask_values, img, self.scale, is_mask=False)
         mask = self.preprocess(self.mask_values, mask, self.scale, is_mask=True)
