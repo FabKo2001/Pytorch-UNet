@@ -26,9 +26,9 @@ def load_image(filename):
 
 def unique_mask_values(idx, mask_dir, mask_suffix):
     # Neuer Suchpfad: Label<ID>.*
-    mask_file = list(mask_dir.glob(f'Label{idx}.*'))
+    mask_file = list(mask_dir.glob(f'label{idx}.*'))
     if not mask_file:
-        raise FileNotFoundError(f'❌ Keine Maske gefunden für ID {idx} im Verzeichnis {mask_dir}')
+        raise FileNotFoundError(f'Keine Maske gefunden für ID {idx} im Verzeichnis {mask_dir}')
 
     mask = np.asarray(load_image(mask_file[0]))
 
@@ -103,8 +103,8 @@ class BasicDataset(Dataset):
     def __getitem__(self, idx):
         id_num = self.ids[idx]
 
-        img_file = list(self.images_dir.glob(f'Image{id_num}.*'))
-        mask_file = list(self.mask_dir.glob(f'Label{id_num}.*'))
+        img_file = list(self.images_dir.glob(f'image{id_num}.*'))
+        mask_file = list(self.mask_dir.glob(f'label{id_num}.*'))
 
         assert len(img_file) == 1, f'Either no image or multiple images found for ID {id_num}: {img_file}'
         assert len(mask_file) == 1, f'Either no mask or multiple masks found for ID {id_num}: {mask_file}'
