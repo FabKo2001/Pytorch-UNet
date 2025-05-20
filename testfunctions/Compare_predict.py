@@ -16,4 +16,4 @@ image = image[:-70]
 image = rescale_image(image)
 image = cv.resize(image, (768, 509), interpolation=cv.INTER_LINEAR)
 
-cv.imwrite(r'/home/fabiankock/PycharmProjects/Pytorch-UNet/preedited_images/bild.tif', image)
+cv.imwrite(r'/preedited_images/_029.tif', image)

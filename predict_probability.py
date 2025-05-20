@@ -59,7 +59,7 @@ def get_args():
     parser.add_argument('--scale', '-s', type=float, default=0.5,
                         help='Scale factor for the input images')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
-    parser.add_argument('--classes', '-c', type=int, default=2, help='Number of classes')
+    parser.add_argument('--classes', '-c', type=int, default=3, help='Number of classes')
 
     return parser.parse_args()
 
@@ -111,16 +111,20 @@ if __name__ == '__main__':
             logging.info(f'Probability maps saved to {out_prefix}_classX_prob.png')
 
         if args.viz:
-            logging.info(f'Visualizing Class 1 probability map for image {filename}, close to continue...')
-            if probs.shape[0] > 1:
-                class_index = 1
-            else:
-                class_index = 0  # falls nur 1 Klasse existiert (Binary Case)
+            logging.info(f'Visualizing probability maps for image {filename}, close window to continue...')
+            num_classes = probs.shape[0]
 
-            #probs[class_index]=cv2.adaptiveThreshold((probs[class_index]*255).astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+            fig, axes = plt.subplots(1, num_classes, figsize=(5 * num_classes, 5))
+            if num_classes == 1:
+                axes = [axes]  # make iterable
 
-            plt.imshow(probs[class_index], cmap='viridis')
-            plt.title(f'Class {class_index} Probability Map')
-            plt.colorbar()
-            plt.axis('off')
+            for c in range(num_classes):
+                ax = axes[c]
+                im = ax.imshow(probs[c], cmap='viridis')
+                ax.set_title(f'Class {c}')
+                ax.axis('off')
+                fig.colorbar(im, ax=ax)
+
+            plt.tight_layout()
             plt.show()
+
