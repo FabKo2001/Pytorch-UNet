@@ -15,7 +15,7 @@ def load_mask(path: str):
     """Load manual segmentation as numpy array (binary mask)."""
     mask = Image.open(path).convert("L")  # grayscale
     mask = np.array(mask)
-    mask = (mask > 127).astype(np.uint8)
+    #mask = mask[:-70]  # Schneide Bauchbinde ab (70px)
     return mask
 
 
@@ -35,20 +35,23 @@ def dice_coeff(input: torch.Tensor, target: torch.Tensor, reduce_batch_first: bo
     return dice.mean()
 
 
-def compute_metrics(pred: np.ndarray, target: np.ndarray):
+def compute_metric(pred: np.ndarray, target: np.ndarray):
     """Compute IoU (sklearn) und Dice (torch)."""
     pred_flat = pred.flatten()
     target_flat = target.flatten()
-
-    # IoU
-    iou = jaccard_score(target_flat, pred_flat, average="binary")
 
     # Dice
     pred_tensor = torch.from_numpy(pred.astype(np.float32)).unsqueeze(0)  # (1,H,W)
     target_tensor = torch.from_numpy(target.astype(np.float32)).unsqueeze(0)  # (1,H,W)
     dice = dice_coeff(pred_tensor, target_tensor, reduce_batch_first=True).item()
 
-    return iou, dice
+    return dice
+
+def compute_metrics(pred, target, eps=1e-6):
+    target = target/255
+    overlap = np.sum(pred * target)          # Schnittmenge
+    total = np.sum(pred) + np.sum(target)    # Summe der beiden Masken
+    return (2.0 * overlap + eps) / (total + eps)
 
 
 def evaluate_models(models_dir, input_image, manual_mask, output_csv,
@@ -87,10 +90,10 @@ def evaluate_models(models_dir, input_image, manual_mask, output_csv,
             pred_mask = (pred_mask > 0).astype(np.uint8)
 
         # Compute metrics
-        iou, dice = compute_metrics(pred_mask, manual)
-        logging.info(f"{model_file}: IoU={iou:.4f}, Dice={dice:.4f}")
+        dice = compute_metrics(pred_mask, manual)
+        logging.info(f"{model_file}:, Dice={dice:.4f}")
 
-        results.append({"model": model_file, "IoU": iou, "Dice": dice})
+        results.append({"model": model_file, "Dice": dice})
 
     # Save results
     df = pd.DataFrame(results)
@@ -100,10 +103,10 @@ def evaluate_models(models_dir, input_image, manual_mask, output_csv,
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-    models_dir = "models/"              # Ordner mit .pth-Dateien
-    input_image = "image.jpg"           # Testbild
-    manual_mask = "manual_mask.png"     # Ground-Truth Maske
-    output_csv = "results.csv"          # Ergebnisse
+    models_dir = r"/home/fabiankock/PycharmProjects/Pytorch-UNet/checkpoints"                                                # Ordner mit .pth-Dateien
+    input_image = r"/home/fabiankock/PycharmProjects/Pytorch-UNet/preedited_images/_029.tif"                                 # Testbild
+    manual_mask = r"/home/fabiankock/PycharmProjects/BachelorarbeitNeuNeu/_029_label_cut.tif"      # Ground-Truth Maske
+    output_csv = r"results.csv"          # Ergebnisse
 
     evaluate_models(models_dir, input_image, manual_mask, output_csv,
                     scale=0.5, threshold=0.5, classes=2, bilinear=False)

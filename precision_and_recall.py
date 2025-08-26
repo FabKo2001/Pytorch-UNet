@@ -10,9 +10,22 @@ from torchvision import transforms
 
 from utils.data_loading import BasicDataset
 from unet import UNet
-from utils.utils import plot_img_and_mask
+from tqdm import tqdm
 
-import matplotlib.pyplot as plt
+##### Calculates average Precision and Recall of MODEL.pth on imgs and masks in data-folder
+
+def precision(mask, true_mask):
+    intersection = np.sum(np.logical_and(mask, true_mask))
+    n_detections = np.sum(mask)
+    return intersection/n_detections
+
+def recall(mask, true_mask):
+    intersection = np.sum(np.logical_and(mask, true_mask))
+    n_positives = np.sum(true_mask)
+    if n_positives == 0:
+        return 1
+    else:
+        return intersection/n_positives
 
 def predict_img(net,
                 full_img,
@@ -39,18 +52,13 @@ def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
     parser.add_argument('--model', '-m', default='MODEL.pth', metavar='FILE',
                         help='Specify the file in which the model is stored')
-    parser.add_argument('--input', '-i', metavar='INPUT', nargs='+', help='Filenames of input images', required=True)
-    parser.add_argument('--output', '-o', metavar='OUTPUT', nargs='+', help='Filenames of output images')
-    parser.add_argument('--viz', '-v', action='store_true',
-                        help='Visualize the images as they are processed')
-    parser.add_argument('--no-save', '-n', action='store_true', help='Do not save the output masks')
     parser.add_argument('--mask-threshold', '-t', type=float, default=0.5,
                         help='Minimum probability value to consider a mask pixel white')
     parser.add_argument('--scale', '-s', type=float, default=0.5,
                         help='Scale factor for the input images')
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
     parser.add_argument('--classes', '-c', type=int, default=2, help='Number of classes')
-    
+
     return parser.parse_args()
 
 
@@ -82,8 +90,7 @@ if __name__ == '__main__':
     args = get_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-    in_files = args.input
-    out_files = get_output_filenames(args)
+    in_indices = range(1,len(os.listdir('data/imgs')))
 
     net = UNet(n_channels=1, n_classes=args.classes, bilinear=args.bilinear)
 
@@ -98,9 +105,11 @@ if __name__ == '__main__':
 
     logging.info('Model loaded!')
 
-    for i, filename in enumerate(in_files):
-        logging.info(f'Predicting image {filename} ...')
-        img = Image.open(filename)
+    Precision = 0
+    Recall = 0
+
+    for i, img_index in tqdm(enumerate(in_indices)):
+        img = Image.open(rf'/home/fabiankock/PycharmProjects/Pytorch-UNet/data/imgs/image{img_index}.tif')
 
         mask = predict_img(net=net,
                            full_img=img,
@@ -108,12 +117,10 @@ if __name__ == '__main__':
                            out_threshold=args.mask_threshold,
                            device=device)
 
-        if not args.no_save:
-            out_filename = out_files[i]
-            result = mask_to_image(mask, mask_values)
-            result.save(out_filename)
-            logging.info(f'Mask saved to {out_filename}')
+        true_mask = Image.open(rf'/home/fabiankock/PycharmProjects/Pytorch-UNet/data/masks/label{img_index}.tif')
 
-        if args.viz:
-            logging.info(f'Visualizing results for image {filename}, close to continue...')
-            plot_img_and_mask(img, mask)
+        Precision += precision(mask, true_mask)
+        Recall += recall(mask, true_mask)
+
+    print(f'Average Precision = {Precision/len(in_indices)}')
+    print(f'Average Recall = {Recall/len(in_indices)}')
